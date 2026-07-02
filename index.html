@@ -501,8 +501,7 @@
 
 <script>
   // ─── CONFIG ────────────────────────────────────────────────────────────────
-  const NPOINT_ID  = '3efb4499c8537c6a4415';
-  const NPOINT_URL = `https://api.npoint.io/${NPOINT_ID}`;
+  const FIREBASE_URL = 'https://stonewood-ops-default-rtdb.firebaseio.com/tasks.json';
   // ──────────────────────────────────────────────────────────────────────────
 
   let tasks = [];
@@ -511,33 +510,51 @@
   let sortCol      = 'created';
   let sortDir      = 'desc';
 
-  // ── JSONBin helpers ────────────────────────────────────────────────────────
+  // ── Storage helpers ────────────────────────────────────────────────────────
+  const LS_KEY = 'sw_ops_tasks';
+
+  function saveLocal(t) {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(t)); } catch(_) {}
+  }
+  function loadLocal() {
+    try { const s = localStorage.getItem(LS_KEY); return s ? JSON.parse(s) : null; } catch(_) { return null; }
+  }
+
   async function loadTasks() {
     try {
-      const r = await fetch(NPOINT_URL);
+      const r = await fetch(FIREBASE_URL);
       if (!r.ok) throw new Error(r.status);
       const data = await r.json();
-      tasks = Array.isArray(data.tasks) ? data.tasks : [];
+      tasks = Array.isArray(data) ? data : [];
+      saveLocal(tasks);
       setSyncStatus('synced');
     } catch(e) {
-      setSyncStatus('error');
-      tasks = [];
+      const cached = loadLocal();
+      if (cached) {
+        tasks = cached;
+        setSyncStatus('error');
+        showToast('Loaded from local cache — cloud sync unavailable.', 'error');
+      } else {
+        setSyncStatus('error');
+        tasks = [];
+      }
     }
   }
 
   async function saveTasks() {
+    saveLocal(tasks);
     setSyncStatus('loading');
     try {
-      const r = await fetch(NPOINT_URL, {
-        method: 'POST',
+      const r = await fetch(FIREBASE_URL, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tasks })
+        body: JSON.stringify(tasks)
       });
       if (!r.ok) throw new Error(r.status);
       setSyncStatus('synced');
     } catch(e) {
       setSyncStatus('error');
-      showToast('Save failed — check your connection.', 'error');
+      showToast('Cloud save failed — data saved locally.', 'error');
     }
   }
 
@@ -809,7 +826,7 @@
     }
   });
 
-  // ── Init ──────────────────────────────────────────────────────────────────────────────
+  // ── Init ────────────────────────────────────────────────────────────────────────────────
   async function init() {
     await loadTasks();
     render();
