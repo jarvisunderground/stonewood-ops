@@ -662,4 +662,161 @@
       return `
         <tr>
           <td style="font-weight:500">${escHtml(t.name)}</td>
-          <td class="dept">${escHtml(t.department||'�
+          <td class="dept">${escHtml(t.department||'—')}</td>
+          <td>${priorityBadge(t.priority||'Medium')}</td>
+          <td>${statusBadge(t.status)}</td>
+          <td>${deadlineHTML}</td>
+          <td class="notes-cell" title="${escHtml(t.notes||'')}">${escHtml(t.notes||'—')}</td>
+          <td style="font-size:0.78rem;color:var(--text-muted)">${t.created ? new Date(t.created).toLocaleDateString() : '—'}</td>
+          <td style="white-space:nowrap">
+            <button class="btn-edit" data-id="${t.id}" title="Edit task">✏️</button>
+            <button class="btn-delete" data-id="${t.id}" title="Delete task">🗑</button>
+          </td>
+        </tr>`;
+    }).join('');
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Edit Modal ──────────────────────────────────────────────────────────────────────────
+  let editingId = null;
+
+  function openModal(id) {
+    const task = tasks.find(t => t.id === id);
+    if (!task) return;
+    editingId = id;
+    document.getElementById('e-name').value     = task.name;
+    document.getElementById('e-dept').value     = task.department || '';
+    document.getElementById('e-priority').value = task.priority || 'Medium';
+    document.getElementById('e-status').value   = task.status;
+    document.getElementById('e-deadline').value = task.deadline || '';
+    document.getElementById('e-notes').value    = task.notes || '';
+    document.getElementById('modal-backdrop').classList.add('open');
+    document.getElementById('e-name').focus();
+  }
+
+  function closeModal() {
+    document.getElementById('modal-backdrop').classList.remove('open');
+    editingId = null;
+  }
+
+  document.getElementById('modal-close-btn').addEventListener('click', closeModal);
+  document.getElementById('modal-cancel-btn').addEventListener('click', closeModal);
+  document.getElementById('modal-backdrop').addEventListener('click', e => {
+    if (e.target === document.getElementById('modal-backdrop')) closeModal();
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+  document.getElementById('modal-save-btn').addEventListener('click', async () => {
+    const name = document.getElementById('e-name').value.trim();
+    if (!name) { document.getElementById('e-name').focus(); return; }
+    const idx = tasks.findIndex(t => t.id === editingId);
+    if (idx === -1) return;
+    tasks[idx] = {
+      ...tasks[idx],
+      name,
+      department: document.getElementById('e-dept').value.trim(),
+      priority:   document.getElementById('e-priority').value,
+      status:     document.getElementById('e-status').value,
+      deadline:   document.getElementById('e-deadline').value,
+      notes:      document.getElementById('e-notes').value.trim(),
+    };
+    closeModal();
+    render();
+    await saveTasks();
+    showToast('Task updated ✓');
+  });
+
+  // ── Events ────────────────────────────────────────────────────────────────────────────
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      filterStatus = btn.dataset.filter;
+      render();
+    });
+  });
+
+  document.getElementById('search-input').addEventListener('input', e => {
+    searchQuery = e.target.value.trim();
+    render();
+  });
+
+  document.querySelectorAll('thead th[data-col]').forEach(th => {
+    th.addEventListener('click', () => {
+      if (sortCol === th.dataset.col) {
+        sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortCol = th.dataset.col;
+        sortDir = 'asc';
+      }
+      render();
+    });
+  });
+
+  const formBody   = document.getElementById('form-body');
+  const formToggle = document.getElementById('form-toggle');
+  formToggle.addEventListener('click', () => {
+    const hidden = formBody.style.display === 'none';
+    formBody.style.display = hidden ? '' : 'none';
+    formToggle.textContent = hidden ? '▲' : '▼';
+  });
+
+  document.getElementById('btn-add').addEventListener('click', async () => {
+    const name = document.getElementById('f-name').value.trim();
+    if (!name) { document.getElementById('f-name').focus(); return; }
+    const task = {
+      id:         crypto.randomUUID(),
+      name,
+      department: document.getElementById('f-dept').value.trim(),
+      status:     document.getElementById('f-status').value,
+      priority:   document.getElementById('f-priority').value,
+      deadline:   document.getElementById('f-deadline').value,
+      notes:      document.getElementById('f-notes').value.trim(),
+      created:    new Date().toISOString(),
+    };
+    tasks.unshift(task);
+    render();
+    await saveTasks();
+    showToast('Task added ✓');
+    document.getElementById('f-name').value     = '';
+    document.getElementById('f-dept').value     = '';
+    document.getElementById('f-notes').value    = '';
+    document.getElementById('f-deadline').value = '';
+    document.getElementById('f-status').value   = 'Not Started';
+    document.getElementById('f-priority').value = 'Medium';
+  });
+
+  document.getElementById('btn-clear').addEventListener('click', () => {
+    ['f-name','f-dept','f-notes','f-deadline'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('f-status').value   = 'Not Started';
+    document.getElementById('f-priority').value = 'Medium';
+  });
+
+  document.getElementById('task-tbody').addEventListener('click', async e => {
+    const del = e.target.closest('.btn-delete');
+    const edt = e.target.closest('.btn-edit');
+    if (del) {
+      const id = del.dataset.id;
+      tasks = tasks.filter(t => t.id !== id);
+      render();
+      await saveTasks();
+      showToast('Task deleted');
+    } else if (edt) {
+      openModal(edt.dataset.id);
+    }
+  });
+
+  // ── Init ──────────────────────────────────────────────────────────────────────────────
+  async function init() {
+    await loadTasks();
+    render();
+    document.getElementById('loading-overlay').classList.add('hidden');
+  }
+
+  init();
+</script>
+</body>
+</html>
