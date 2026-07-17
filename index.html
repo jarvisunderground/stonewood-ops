@@ -309,9 +309,52 @@
       .form-row { grid-template-columns: 1fr; }
       .form-row-2 { grid-template-columns: 1fr; }
     }
+
+    /* ── Password Gate ── */
+    #password-gate {
+      position: fixed; inset: 0; z-index: 1000;
+      background: linear-gradient(135deg, var(--blue-primary) 0%, var(--bg) 100%);
+      display: flex; align-items: center; justify-content: center;
+    }
+    #password-gate.hidden { display: none; }
+    #gate-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 40px 36px; width: 360px; max-width: 90vw;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+      text-align: center;
+    }
+    #gate-card .logo-icon { width: 56px; height: 56px; font-size: 26px; margin: 0 auto 16px; }
+    .gate-title { font-size: 1.3rem; font-weight: 700; color: #fff; }
+    .gate-sub { font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 26px; }
+    .gate-form { display: flex; flex-direction: column; gap: 12px; }
+    .gate-form input[type="password"] { text-align: center; }
+    .gate-form .btn { width: 100%; }
+    .gate-error { color: var(--red); font-size: 0.82rem; }
+    .gate-error.hidden { display: none; }
+    @keyframes gate-shake {
+      10%, 90% { transform: translateX(-2px); }
+      20%, 80% { transform: translateX(4px); }
+      30%, 50%, 70% { transform: translateX(-8px); }
+      40%, 60% { transform: translateX(8px); }
+    }
+    #gate-card.shake { animation: gate-shake 0.5s; }
   </style>
 </head>
 <body>
+
+<!-- Password Gate -->
+<div id="password-gate">
+  <div id="gate-card">
+    <div class="logo-icon">SW</div>
+    <div class="gate-title">Stonewood Products</div>
+    <div class="gate-sub">Operations Dashboard</div>
+    <div class="gate-form">
+      <input type="password" id="gate-password" placeholder="Enter password" autocomplete="current-password" />
+      <button class="btn btn-primary" id="gate-submit">Enter Dashboard</button>
+      <div id="gate-error" class="gate-error hidden">Incorrect password</div>
+    </div>
+  </div>
+</div>
 
 <!-- Loading overlay -->
 <div id="loading-overlay">
@@ -833,7 +876,41 @@
     document.getElementById('loading-overlay').classList.add('hidden');
   }
 
-  init();
+  // ── Password Gate ──────────────────────────────────────────────────────────
+  const GATE_PASSWORD    = 'Operations1';
+  const GATE_SESSION_KEY = 'sw_ops_unlocked';
+
+  function unlockGate() {
+    document.getElementById('password-gate').classList.add('hidden');
+    init();
+  }
+
+  function tryUnlock() {
+    const input   = document.getElementById('gate-password');
+    const errorEl = document.getElementById('gate-error');
+    const card    = document.getElementById('gate-card');
+    if (input.value === GATE_PASSWORD) {
+      sessionStorage.setItem(GATE_SESSION_KEY, '1');
+      errorEl.classList.add('hidden');
+      unlockGate();
+    } else {
+      errorEl.classList.remove('hidden');
+      card.classList.remove('shake');
+      void card.offsetWidth; // restart animation
+      card.classList.add('shake');
+    }
+  }
+
+  document.getElementById('gate-submit').addEventListener('click', tryUnlock);
+  document.getElementById('gate-password').addEventListener('keydown', e => {
+    if (e.key === 'Enter') tryUnlock();
+  });
+
+  if (sessionStorage.getItem(GATE_SESSION_KEY) === '1') {
+    unlockGate();
+  } else {
+    document.getElementById('gate-password').focus();
+  }
 </script>
 </body>
 </html>
